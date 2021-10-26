@@ -7,7 +7,7 @@ import scala.concurrent.duration._
 
 object CountWithSleep {
 
-  val a = for {
+  val run = for {
     num <- IO.ref(0)
     sleep = IO.println("Sleep") *> IO.sleep(1.second)
 
@@ -16,6 +16,4 @@ object CountWithSleep {
 
     _ <- (printNext *> num.update(_ + 1)).foreverM.void
   } yield ()
-
-  val run = a
 }
