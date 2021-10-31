@@ -28,9 +28,7 @@ object CopyFilePolymorphic extends IOApp {
   def copy[F[_]: Async: std.Console](
     origin: File,
     destination: File,
-  ): F[Long] = inputOutputStreams(origin, destination).use { case (in, out) =>
-    transfer(in, out)
-  }
+  ): F[Long] = inputOutputStreams(origin, destination).use { case (in, out) => transfer(in, out) }
 
   def transmit[F[_]: Async](
     origin: InputStream,

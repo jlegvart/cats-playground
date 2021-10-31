@@ -91,9 +91,9 @@ object CopyFile extends IOApp {
     acc: Long,
   ): F[Long] =
     for {
-      //!!!!!!!!!!!!
+      // !!!!!!!!!!!!
       // Introduced artificial delay when reading a file
-      //!!!!!!!!!!!!
+      // !!!!!!!!!!!!
       amount <-
         Async[F].sleep(10.millisecond) *> Async[F].blocking(
           origin.read(buffer, 0, buffer.length)
