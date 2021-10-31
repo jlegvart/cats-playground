@@ -1,9 +1,10 @@
-package examples
+package count
 
 import cats.effect.IO
 import scala.concurrent.duration._
+import cats.effect.IOApp
 
-object FizzBuzz {
+object FizzBuzz extends IOApp.Simple {
 
   val run =
     for {
