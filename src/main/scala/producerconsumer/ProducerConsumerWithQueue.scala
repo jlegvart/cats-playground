@@ -8,9 +8,8 @@ import cats.effect.IOApp
 import cats.effect.Ref
 import cats.effect.Sync
 import cats.effect.std.Console
-import cats.syntax.all._
+import cats.implicits._
 import scala.concurrent.duration._
-
 import cats.effect.std
 
 object ProducerConsumerWithQueue extends IOApp {
@@ -24,7 +23,7 @@ object ProducerConsumerWithQueue extends IOApp {
       i <- counterR.getAndUpdate(_ + 1)
       _ <- Async[F].sleep(10.milliseconds) *> queue.offer(i)
       _ <-
-        if (i % 100 == 0)
+        if (i % 1000 == 0)
           Console[F].println(s"Producer $id has reached $i items")
         else
           Sync[F].unit
@@ -33,9 +32,9 @@ object ProducerConsumerWithQueue extends IOApp {
 
   def consumer[F[_]: Async: Console](id: Int, queue: std.Queue[F, Int]): F[Unit] =
     for {
-      i <- Async[F].sleep(15.milliseconds) *> queue.take
+      i <- Async[F].sleep(10.milliseconds) *> queue.take
       _ <-
-        if (i % 100 == 0)
+        if (i % 1000 == 0)
           Console[F].println(s"Consumer $id has reached $i items")
         else
           Async[F].unit
@@ -46,17 +45,19 @@ object ProducerConsumerWithQueue extends IOApp {
     for {
       queue <- std.Queue.unbounded[IO, Int]
       counterR <- Ref.of[IO, Int](1)
-      producers = List.range(1, 2).map(producer(_, counterR, queue)) // 10 producers
-      consumers = List.range(1, 2).map(consumer(_, queue)) // 10 consumers
+      producers = List.range(1, 2).map(producer(_, counterR, queue))
+      consumers = List.range(1, 2).map(consumer(_, queue))
 
-      _ <- consumer(1, queue).start
-      _ <- producer(1, counterR, queue).start
-      _ <-
-        (queue
-          .size
-          .flatMap(size => (IO.sleep(1.second) *> IO.println(s"Current size: $size"))))
-          .foreverM
-          .void
+      p = poll(queue)
+
+      _ <- (producers ++ consumers).parSequence.background.void.use(_ => p)
     } yield ExitCode.Success
+
+  def poll[F[_]: Async: std.Console](queue: std.Queue[F, Int]) =
+    queue
+      .size
+      .flatMap(size => (Async[F].sleep(1.second) *> Console[F].println(s"Current size: $size")))
+      .foreverM
+      .void
 
 }
