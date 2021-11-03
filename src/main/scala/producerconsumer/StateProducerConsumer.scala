@@ -43,6 +43,7 @@ object StateProducerConsumer extends IOApp {
       }.flatten
 
     for {
+      // Sleep here to avoid consumers dying (heavy contention?)
       i <- Async[F].sleep(5.milliseconds) *> counterR.getAndUpdate(_ + 1)
       _ <- offer(i)
       _ <-
