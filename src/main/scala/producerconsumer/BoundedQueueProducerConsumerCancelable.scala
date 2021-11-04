@@ -111,7 +111,7 @@ object BoundedQueueProducerConsumerCancelable extends IOApp {
       producers = List.range(1, 2).map(producer(_, counterR, stateR))
       consumers = List.range(1, 2).map(consumer(_, stateR))
 
-      startTime = OffsetDateTime.now()
+      startTime <- IO(OffsetDateTime.now())
 
       _ <- (producers ++ consumers).parSequence.background.void.use(_ => poll[IO](startTime, 10))
     } yield ExitCode.Success
