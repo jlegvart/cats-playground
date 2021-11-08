@@ -28,20 +28,13 @@ class WebCrawler[F[_]: Async: Console](client: Client[F]) {
   val pattern = "href=\"(\\/wiki\\/.*?)\"".r;
   val wiki = ""
 
-  def start(url: String) =
+  def start(uri: Uri) =
     for {
       urlQ <- Queue.unbounded[F, String]
       resQ <- Queue.unbounded[F, WebCrawler.CrawlerResult]
 
-      host <- Async[F].pure(
-        Uri
-          .fromString(url)
-          .flatMap(a => a.host.toRight[Exception](new RuntimeException("Invalid url")))
-      )
-      hostStr <- host.fold(Async[F].raiseError(_), Async[F].pure(_))
-
-      _ <- Console[F].println(s"Host: ${hostStr}")
-      - <- urlQ.offer(url)
+      _ <- Console[F].println(s"Starting scraping: ${uri.toString()}")
+      - <- urlQ.offer(uri.toString())
       _ <- crawl(urlQ, resQ)
     } yield ()
 
@@ -51,7 +44,6 @@ class WebCrawler[F[_]: Async: Console](client: Client[F]) {
       _ <- Console[F].println(s"Crawling next url: $next")
 
       result <- client.expect[String](next)
-
       a =
         pattern
           .findAllMatchIn(result)

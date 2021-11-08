@@ -6,6 +6,9 @@ import cats.effect.IO
 import org.http4s.client.blaze._
 import org.http4s.client._
 import scala.concurrent.ExecutionContext.Implicits.global
+import org.http4s.Uri
+import org.http4s.ParseFailure
+import cats.data.EitherT
 
 object WebCrawlerMain extends IOApp {
 
@@ -13,17 +16,28 @@ object WebCrawlerMain extends IOApp {
     args: List[String]
   ): IO[ExitCode] =
     for {
-      _ <- BlazeClientBuilder[IO](global).resource.use { client =>
-        startCrawler(client) *> IO.unit
+      url <- checkUrl(args).flatMap {
+        case Right(url)      => IO.pure(url)
+        case Left(exception) => IO.raiseError(exception)
       }
-
+      _ <- BlazeClientBuilder[IO](global).resource.use(startCrawler(url, _))
     } yield ExitCode.Success
 
-  def startCrawler(client: Client[IO]): IO[Unit] = {
+  def startCrawler(uri: Uri, client: Client[IO]): IO[Unit] = {
     val crawler = WebCrawler(client)
     crawler
-      .start("https://en.m.wikipedia.org/wiki/Gerald_Weinberg")
+      .start(uri)
       .onError(_ => IO.println("Error during crawler starting"))
   }
+
+  def checkUrl(args: List[String]): IO[Either[ParseFailure, Uri]] =
+    for {
+      _ <-
+        if (args.length < 1)
+          IO.raiseError(new RuntimeException("No url provided"))
+        else
+          IO.unit
+      uriFromStr = Uri.fromString(args(0))
+    } yield uriFromStr
 
 }
