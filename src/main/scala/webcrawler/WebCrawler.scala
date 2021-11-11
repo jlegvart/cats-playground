@@ -37,15 +37,20 @@ class WebCrawler[F[_]: Async: Console](client: Client[F]) {
     for {
       urlQ <- Queue.unbounded[F, Uri]
       resQ <- Ref.of[F, List[CrawlerResult]](List())
+      crawled <- Ref.of[F, Set[String]](Set())
 
       _ <- Console[F].println(s"Starting scraping: ${seed.toString()}")
       - <- urlQ.offer(seed)
-      _ <- crawl(urlQ, resQ)
+      _ <- crawl(urlQ, resQ, crawled)
     } yield ()
 
-  def crawl(urlQueue: Queue[F, Uri], listR: Ref[F, List[CrawlerResult]]): F[Unit] =
+  def crawl(
+    urlQueue: Queue[F, Uri],
+    listR: Ref[F, List[CrawlerResult]],
+    crawledR: Ref[F, Set[String]],
+  ): F[Unit] =
     for {
-      next <- urlQueue.take
+      next <- takeNext(urlQueue, crawledR)
       _ <- Console[F].println(s"Crawling next url: ${next.toString()}")
 
       host <- getFullHost(next)
@@ -61,8 +66,24 @@ class WebCrawler[F[_]: Async: Console](client: Client[F]) {
         (list :+ item, item)
       }
       _ <- Async[F].sleep(500.milliseconds)
-      _ <- crawl(urlQueue, listR)
+      _ <- crawl(urlQueue, listR, crawledR)
     } yield ()
+
+  def takeNext(urlQ: Queue[F, Uri], crawledR: Ref[F, Set[String]]): F[Uri] =
+    for {
+      next <- urlQ.take
+      alreadyContains <- crawledR.modify { set =>
+        if (set.contains(next.toString()))
+          (set, true)
+        else
+          (set + next.toString(), false)
+      }
+      _ <-
+        if (alreadyContains)
+          takeNext(urlQ, crawledR)
+        else
+          Async[F].unit
+    } yield next
 
   def getFullHost(url: Uri) =
     (url.host, url.scheme) match {
