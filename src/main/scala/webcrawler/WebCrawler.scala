@@ -22,27 +22,28 @@ import org.jsoup.nodes.Element
 
 import cats.syntax.all._
 import cats.effect.syntax.all._
+import cats.effect.kernel.Ref
+import scala.concurrent.duration._
+
+case class CrawlerResult(url: String, title: String, content: String)
 
 object WebCrawler {
-
-  class CrawlerResult(url: String, content: String)
-
   def apply[F[_]: Async: Console](client: Client[F]): WebCrawler[F] = new WebCrawler[F](client)
 }
 
 class WebCrawler[F[_]: Async: Console](client: Client[F]) {
 
-  def start(uri: Uri) =
+  def start(seed: Uri) =
     for {
       urlQ <- Queue.unbounded[F, Uri]
-      resQ <- Queue.unbounded[F, WebCrawler.CrawlerResult]
+      resQ <- Ref.of[F, List[CrawlerResult]](List())
 
-      _ <- Console[F].println(s"Starting scraping: ${uri.toString()}")
-      - <- urlQ.offer(uri)
+      _ <- Console[F].println(s"Starting scraping: ${seed.toString()}")
+      - <- urlQ.offer(seed)
       _ <- crawl(urlQ, resQ)
     } yield ()
 
-  def crawl(urlQueue: Queue[F, Uri], results: Queue[F, WebCrawler.CrawlerResult]): F[Unit] =
+  def crawl(urlQueue: Queue[F, Uri], listR: Ref[F, List[CrawlerResult]]): F[Unit] =
     for {
       next <- urlQueue.take
       _ <- Console[F].println(s"Crawling next url: ${next.toString()}")
@@ -55,6 +56,12 @@ class WebCrawler[F[_]: Async: Console](client: Client[F]) {
       links <- parseLinks(host, htmlDocument)
 
       _ <- links.traverse(urlQueue.offer(_))
+      _ <- listR.modify { list =>
+        val item = CrawlerResult(next.toString(), title, content)
+        (list :+ item, item)
+      }
+      _ <- Async[F].sleep(500.milliseconds)
+      _ <- crawl(urlQueue, listR)
     } yield ()
 
   def getFullHost(url: Uri) =
