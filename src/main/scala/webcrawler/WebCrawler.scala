@@ -24,14 +24,20 @@ import cats.syntax.all._
 import cats.effect.syntax.all._
 import cats.effect.kernel.Ref
 import scala.concurrent.duration._
+import webcrawler.repository.DoobieRepository
 
-case class CrawlerResult(url: String, title: String, content: String)
+case class CrawlerResult(id: Option[Long] = None, url: String, title: String, content: String)
 
 object WebCrawler {
-  def apply[F[_]: Async: Console](client: Client[F]): WebCrawler[F] = new WebCrawler[F](client)
+
+  def apply[F[_]: Async: Console](
+    client: Client[F],
+    repository: DoobieRepository[F],
+  ): WebCrawler[F] = new WebCrawler[F](client, repository)
+
 }
 
-class WebCrawler[F[_]: Async: Console](client: Client[F]) {
+class WebCrawler[F[_]: Async: Console](client: Client[F], repository: DoobieRepository[F]) {
 
   def start(seed: Uri) =
     for {
@@ -56,15 +62,15 @@ class WebCrawler[F[_]: Async: Console](client: Client[F]) {
       host <- getFullHost(next)
       html <- client.expect[String](next)
       htmlDocument = Jsoup.parse(html)
-      title <- title(htmlDocument)
-      content <- parseContent(htmlDocument)
+
+      result <- getCrawlerResult(next.toString(), htmlDocument)
       links <- parseLinks(host, htmlDocument)
 
       _ <- links.traverse(urlQueue.offer(_))
       _ <- listR.modify { list =>
-        val item = CrawlerResult(next.toString(), title, content)
-        (list :+ item, item)
+        (list :+ result, Async[F].unit)
       }
+      _ <- repository.insert(result)
       _ <- Async[F].sleep(500.milliseconds)
       _ <- crawl(urlQueue, listR, crawledR)
     } yield ()
@@ -95,7 +101,11 @@ class WebCrawler[F[_]: Async: Console](client: Client[F]) {
         )
     }
 
-  def title(html: Document): F[String] = Async[F].pure(html.title())
+  def getCrawlerResult(url: String, html: Document): F[CrawlerResult] =
+    for {
+      title <- Async[F].pure(html.title())
+      content <- Async[F].pure(html.text())
+    } yield (CrawlerResult(url = url, title = title, content = content))
 
   def parseLinks(host: String, html: Document): F[Seq[Uri]] = Async[F].pure(
     html
@@ -114,7 +124,5 @@ class WebCrawler[F[_]: Async: Console](client: Client[F]) {
       .flatten
       .distinct
   )
-
-  def parseContent(html: Document): F[String] = Async[F].pure(html.text())
 
 }

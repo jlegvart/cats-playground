@@ -9,32 +9,48 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import org.http4s.Uri
 import org.http4s.ParseFailure
 import cats.data.EitherT
+import webcrawler.repository.DoobieRepository
+
+import doobie.Transactor
 
 object WebCrawlerMain extends IOApp {
+
+  val dbName = "crawler"
+  val dbUsername = "postgres"
+  val dbPassword = "postgres"
 
   override def run(
     args: List[String]
   ): IO[ExitCode] =
     for {
-      url <- checkUrl(args).flatMap {
+      seed <- checkUrl(args).flatMap {
         case Right(url)      => IO.pure(url)
         case Left(exception) => IO.raiseError(exception)
       }
-      _ <- BlazeClientBuilder[IO](global).resource.use(startCrawler(url, _))
+
+      xa = Transactor.fromDriverManager[IO](
+        "org.postgresql.Driver",
+        s"jdbc:postgresql://localhost:5432/$dbName",
+        dbUsername,
+        dbPassword,
+      )
+
+      repository = new DoobieRepository(xa)
+      _ <- BlazeClientBuilder[IO](global).resource.use(startCrawler(seed, _, repository))
     } yield ExitCode.Success
 
-  def startCrawler(uri: Uri, client: Client[IO]): IO[Unit] = {
-    val crawler = WebCrawler(client)
+  def startCrawler(seed: Uri, client: Client[IO], repository: DoobieRepository[IO]): IO[Unit] = {
+    val crawler = WebCrawler(client, repository)
     crawler
-      .start(uri)
+      .start(seed)
       .onError(_ => IO.println("Error during crawler starting"))
   }
 
   def checkUrl(args: List[String]): IO[Either[ParseFailure, Uri]] =
     for {
       _ <-
-        if (args.length < 1)
-          IO.raiseError(new RuntimeException("No url provided"))
+        if (args.length < 1 || !args(0).startsWith("http"))
+          IO.raiseError(new RuntimeException("Invalid url provided"))
         else
           IO.unit
       uriFromStr = Uri.fromString(args(0))
