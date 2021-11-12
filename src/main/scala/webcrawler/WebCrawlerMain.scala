@@ -12,6 +12,7 @@ import cats.data.EitherT
 import webcrawler.repository.DoobieRepository
 
 import doobie.Transactor
+import org.http4s.ParseResult
 
 object WebCrawlerMain extends IOApp {
 
@@ -24,8 +25,9 @@ object WebCrawlerMain extends IOApp {
   ): IO[ExitCode] =
     for {
       seed <- checkUrl(args).flatMap {
-        case Right(url)      => IO.pure(url)
-        case Left(exception) => IO.raiseError(exception)
+        case Right(url) => IO.pure(url)
+        case Left(failure) =>
+          IO.raiseError(new RuntimeException(s"Error parsing url: ${failure.message}"))
       }
 
       xa = Transactor.fromDriverManager[IO](
@@ -48,12 +50,11 @@ object WebCrawlerMain extends IOApp {
 
   def checkUrl(args: List[String]): IO[Either[ParseFailure, Uri]] =
     for {
-      _ <-
+      uri <-
         if (args.length < 1 || !args(0).startsWith("http"))
-          IO.raiseError(new RuntimeException("Invalid url provided"))
+          IO.pure(ParseResult.fail(args(0), "Invalid url"))
         else
-          IO.unit
-      uriFromStr = Uri.fromString(args(0))
-    } yield uriFromStr
+          IO.pure(Uri.fromString(args(0)))
+    } yield uri
 
 }
