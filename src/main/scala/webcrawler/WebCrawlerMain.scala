@@ -21,6 +21,7 @@ import cats.effect.kernel.Resource
 
 object WebCrawlerMain extends IOApp {
 
+  val dbDriver = "org.postgresql.Driver"
   val dbName = "crawler"
   val dbUsername = "postgres"
   val dbPassword = "postgres"
@@ -50,7 +51,7 @@ object WebCrawlerMain extends IOApp {
     for {
       fixedThreadPool <- ExecutionContexts.fixedThreadPool[IO](12)
       transactor <- HikariTransactor.newHikariTransactor[IO](
-        "org.postgresql.Driver",
+        dbDriver,
         dbUrl,
         dbUsername,
         dbPassword,
