@@ -33,7 +33,6 @@ object WebCrawlerMain extends IOApp {
       for {
         seed <- Resource.liftK(parseSeed(args))
         transactor <- transactorResource()
-        repository = new DoobieRepository(transactor)
         client <- BlazeClientBuilder[IO](global).resource
         exit <- Resource.liftK(startCrawler(seed, client, new DoobieRepository(transactor)))
       } yield exit
