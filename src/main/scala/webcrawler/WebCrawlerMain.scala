@@ -14,6 +14,10 @@ import webcrawler.repository.DoobieRepository
 import doobie.Transactor
 import org.http4s.ParseResult
 import org.flywaydb.core.Flyway
+import doobie.util.ExecutionContexts
+import doobie.hikari.HikariTransactor
+import doobie.util.transactor
+import cats.effect.kernel.Resource
 
 object WebCrawlerMain extends IOApp {
 
@@ -24,25 +28,37 @@ object WebCrawlerMain extends IOApp {
 
   override def run(
     args: List[String]
-  ): IO[ExitCode] =
-    for {
-      seed <- checkUrl(args).flatMap {
-        case Right(url) => IO.pure(url)
-        case Left(failure) =>
-          IO.raiseError(new RuntimeException(s"Error parsing url: ${failure.message}"))
-      }
+  ): IO[ExitCode] = {
+    val resource =
+      for {
+        seed <- Resource.liftK(parseSeed(args))
+        transactor <- transactorResource()
+        repository = new DoobieRepository(transactor)
+        client <- BlazeClientBuilder[IO](global).resource
+        exit <- Resource.liftK(startCrawler(seed, client, new DoobieRepository(transactor)))
+      } yield exit
 
-      xa = Transactor.fromDriverManager[IO](
+    resource.use(_ => IO.pure(ExitCode.Success))
+  }
+
+  def parseSeed(args: List[String]) = checkUrl(args).flatMap {
+    case Right(url) => IO.pure(url)
+    case Left(failure) =>
+      IO.raiseError(new RuntimeException(s"Error parsing url: ${failure.message}"))
+  }
+
+  def transactorResource(): Resource[IO, HikariTransactor[IO]] =
+    for {
+      fixedThreadPool <- ExecutionContexts.fixedThreadPool[IO](12)
+      transactor <- HikariTransactor.newHikariTransactor[IO](
         "org.postgresql.Driver",
         dbUrl,
         dbUsername,
         dbPassword,
+        fixedThreadPool,
       )
-
-      _ <- initializeDb()
-      repository = new DoobieRepository(xa)
-      // _ <- BlazeClientBuilder[IO](global).resource.use(startCrawler(seed, _, repository))
-    } yield ExitCode.Success
+      _ <- Resource.liftK(initializeDb())
+    } yield transactor
 
   def startCrawler(seed: Uri, client: Client[IO], repository: DoobieRepository[IO]): IO[Unit] = {
     val crawler = WebCrawler(client, repository)
