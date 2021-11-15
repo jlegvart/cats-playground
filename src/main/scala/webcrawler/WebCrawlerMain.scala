@@ -13,12 +13,14 @@ import webcrawler.repository.DoobieRepository
 
 import doobie.Transactor
 import org.http4s.ParseResult
+import org.flywaydb.core.Flyway
 
 object WebCrawlerMain extends IOApp {
 
   val dbName = "crawler"
   val dbUsername = "postgres"
   val dbPassword = "postgres"
+  val dbUrl = s"jdbc:postgresql://localhost:5432/$dbName"
 
   override def run(
     args: List[String]
@@ -32,13 +34,14 @@ object WebCrawlerMain extends IOApp {
 
       xa = Transactor.fromDriverManager[IO](
         "org.postgresql.Driver",
-        s"jdbc:postgresql://localhost:5432/$dbName",
+        dbUrl,
         dbUsername,
         dbPassword,
       )
 
+      _ <- initializeDb()
       repository = new DoobieRepository(xa)
-      _ <- BlazeClientBuilder[IO](global).resource.use(startCrawler(seed, _, repository))
+      // _ <- BlazeClientBuilder[IO](global).resource.use(startCrawler(seed, _, repository))
     } yield ExitCode.Success
 
   def startCrawler(seed: Uri, client: Client[IO], repository: DoobieRepository[IO]): IO[Unit] = {
@@ -56,5 +59,12 @@ object WebCrawlerMain extends IOApp {
         else
           IO.pure(Uri.fromString(args(0)))
     } yield uri
+
+  def initializeDb(): IO[Unit] = IO
+    .delay {
+      val fw: Flyway = Flyway.configure().dataSource(dbUrl, dbUsername, dbPassword).load()
+      fw.migrate()
+    }
+    .as(())
 
 }
