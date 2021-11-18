@@ -25,6 +25,7 @@ import cats.effect.syntax.all._
 import cats.effect.kernel.Ref
 import scala.concurrent.duration._
 import webcrawler.repository.DoobieRepository
+import cats.effect.kernel.MonadCancel
 
 case class CrawlerResult(id: Option[Long] = None, url: String, title: String, content: String)
 
@@ -60,6 +61,15 @@ class WebCrawler[F[_]: Async: Console](
     listR: Ref[F, List[CrawlerResult]],
     crawledR: Ref[F, Set[String]],
   ): F[Unit] =
+    MonadCancel[F].uncancelable { _ =>
+      parseNext(urlQueue, listR, crawledR)
+    } >> Async[F].sleep(500.milliseconds) >> crawl(urlQueue, listR, crawledR)
+
+  def parseNext(
+    urlQueue: Queue[F, Uri],
+    listR: Ref[F, List[CrawlerResult]],
+    crawledR: Ref[F, Set[String]],
+  ): F[Unit] =
     for {
       next <- takeNext(urlQueue, crawledR)
       _ <- Console[F].println(s"Crawling next url: ${next.toString()}")
@@ -76,8 +86,6 @@ class WebCrawler[F[_]: Async: Console](
         (list :+ result, Async[F].unit)
       }
       _ <- repository.insert(result)
-      _ <- Async[F].sleep(500.milliseconds)
-      _ <- crawl(urlQueue, listR, crawledR)
     } yield ()
 
   def takeNext(urlQ: Queue[F, Uri], crawledR: Ref[F, Set[String]]): F[Uri] =
