@@ -31,15 +31,20 @@ case class CrawlerResult(id: Option[Long] = None, url: String, title: String, co
 object WebCrawler {
 
   def apply[F[_]: Async: Console](
+    seed: Uri,
     client: Client[F],
     repository: DoobieRepository[F],
-  ): WebCrawler[F] = new WebCrawler[F](client, repository)
+  ): WebCrawler[F] = new WebCrawler[F](seed, client, repository)
 
 }
 
-class WebCrawler[F[_]: Async: Console](client: Client[F], repository: DoobieRepository[F]) {
+class WebCrawler[F[_]: Async: Console](
+  seed: Uri,
+  client: Client[F],
+  repository: DoobieRepository[F],
+) {
 
-  def start(seed: Uri) =
+  def start =
     for {
       urlQ <- Queue.unbounded[F, Uri]
       resQ <- Ref.of[F, List[CrawlerResult]](List())

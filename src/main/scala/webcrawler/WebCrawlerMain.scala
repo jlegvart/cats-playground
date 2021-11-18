@@ -29,17 +29,14 @@ object WebCrawlerMain extends IOApp {
 
   override def run(
     args: List[String]
-  ): IO[ExitCode] = {
-    val resource =
-      for {
-        seed <- Resource.liftK(parseSeed(args))
-        transactor <- transactorResource()
-        client <- BlazeClientBuilder[IO](global).resource
-        exit <- Resource.liftK(startCrawler(seed, client, new DoobieRepository(transactor)))
-      } yield exit
-
-    resource.use(_ => IO.pure(ExitCode.Success))
-  }
+  ): IO[ExitCode] =
+    (for {
+      seed <- Resource.liftK(parseSeed(args))
+      transactor <- transactorResource()
+      client <- BlazeClientBuilder[IO](global).resource
+      repository = new DoobieRepository(transactor)
+      crawler <- Resource.liftK(IO.pure(WebCrawler(seed, client, repository)))
+    } yield crawler).use(_.start).as(ExitCode.Success)
 
   def parseSeed(args: List[String]) = checkUrl(args).flatMap {
     case Right(url) => IO.pure(url)
@@ -59,13 +56,6 @@ object WebCrawlerMain extends IOApp {
       )
       _ <- Resource.liftK(initializeDb())
     } yield transactor
-
-  def startCrawler(seed: Uri, client: Client[IO], repository: DoobieRepository[IO]): IO[Unit] = {
-    val crawler = WebCrawler(client, repository)
-    crawler
-      .start(seed)
-      .onError(_ => IO.println("Error during crawler starting"))
-  }
 
   def checkUrl(args: List[String]): IO[Either[ParseFailure, Uri]] =
     for {
