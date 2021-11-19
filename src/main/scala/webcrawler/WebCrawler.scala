@@ -51,7 +51,6 @@ class WebCrawler[F[_]: Async: Console](
       resQ <- Ref.of[F, List[CrawlerResult]](List())
       crawled <- Ref.of[F, Set[String]](Set())
 
-      _ <- Console[F].println(s"Starting scraping: ${seed.toString()}")
       - <- urlQ.offer(seed)
       _ <- crawl(urlQ, resQ, crawled)
     } yield ()
