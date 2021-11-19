@@ -16,4 +16,9 @@ class DoobieRepository[F[_]: MonadCancelThrow](val xa: Transactor[F]) {
       .map(id => res.copy(id = id.some))
       .transact(xa)
 
+  def select = sql"SELECT id, title, url, content FROM data LIMIT 5"
+    .query[CrawlerResult]
+    .to[List]
+    .transact(xa)
+
 }

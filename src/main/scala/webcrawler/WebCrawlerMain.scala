@@ -35,10 +35,27 @@ object WebCrawlerMain extends IOApp {
     (for {
       seed <- Resource.liftK(parseSeed(args))
       transactor <- transactor
-      client <- BlazeClientBuilder[IO](global).resource
       repository = new DoobieRepository(transactor)
+      crawler <- initCrawler(seed, transactor, repository)
+    } yield crawler)
+      .use(_.start)
+      .as(ExitCode.Success)
+
+  def initCrawler(
+    seed: Uri,
+    transactor: HikariTransactor[IO],
+    repository: DoobieRepository[IO],
+  ): Resource[IO, WebCrawler[IO]] =
+    for {
+      client <- BlazeClientBuilder[IO](global).resource
       crawler <- Resource.liftK(IO.pure(WebCrawler(seed, client, repository, numOfCrawlers)))
-    } yield crawler).use(_.start).as(ExitCode.Success)
+    } yield crawler
+
+  def selectData(repository: DoobieRepository[IO]) =
+    for {
+      list <- repository.select
+      _ <- IO.println(list)
+    } yield ()
 
   def parseSeed(args: List[String]): IO[Uri] =
     if (args.length < 1 || !args(0).startsWith("http")) {
