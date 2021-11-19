@@ -36,9 +36,10 @@ object WebCrawlerMain extends IOApp {
       seed <- Resource.liftK(parseSeed(args))
       transactor <- transactor
       repository = new DoobieRepository(transactor)
-      crawler <- initCrawler(seed, transactor, repository)
-    } yield crawler)
-      .use(_.start)
+      // crawler <- initCrawler(seed, transactor, repository)
+      select <- Resource.liftK(selectData(repository))
+    } yield select)
+      .use(_ => IO.unit)
       .as(ExitCode.Success)
 
   def initCrawler(
@@ -54,7 +55,7 @@ object WebCrawlerMain extends IOApp {
   def selectData(repository: DoobieRepository[IO]) =
     for {
       list <- repository.select
-      _ <- IO.println(list)
+      _ <- IO.delay(list.foreach(item => println(item.title)))
     } yield ()
 
   def parseSeed(args: List[String]): IO[Uri] =
