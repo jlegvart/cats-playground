@@ -27,6 +27,8 @@ object WebCrawlerMain extends IOApp {
   val dbPassword = "postgres"
   val dbUrl = s"jdbc:postgresql://localhost:5432/$dbName"
 
+  val numOfCrawlers = 2
+
   override def run(
     args: List[String]
   ): IO[ExitCode] =
@@ -35,7 +37,7 @@ object WebCrawlerMain extends IOApp {
       transactor <- transactor
       client <- BlazeClientBuilder[IO](global).resource
       repository = new DoobieRepository(transactor)
-      crawler <- Resource.liftK(IO.pure(WebCrawler(seed, client, repository)))
+      crawler <- Resource.liftK(IO.pure(WebCrawler(seed, client, repository, numOfCrawlers)))
     } yield crawler).use(_.start).as(ExitCode.Success)
 
   def parseSeed(args: List[String]): IO[Uri] =

@@ -26,23 +26,26 @@ import cats.effect.kernel.Ref
 import scala.concurrent.duration._
 import webcrawler.repository.DoobieRepository
 import cats.effect.kernel.MonadCancel
+import cats.Parallel
 
 case class CrawlerResult(id: Option[Long] = None, url: String, title: String, content: String)
 
 object WebCrawler {
 
-  def apply[F[_]: Async: Console](
+  def apply[F[_]: Async: Parallel: Console](
     seed: Uri,
     client: Client[F],
     repository: DoobieRepository[F],
-  ): WebCrawler[F] = new WebCrawler[F](seed, client, repository)
+    numOfCrawlers: Int,
+  ): WebCrawler[F] = new WebCrawler[F](seed, client, repository, numOfCrawlers)
 
 }
 
-class WebCrawler[F[_]: Async: Console](
+class WebCrawler[F[_]: Async: Parallel: Console](
   seed: Uri,
   client: Client[F],
   repository: DoobieRepository[F],
+  numOfCrawlers: Int,
 ) {
 
   def start =
@@ -51,27 +54,30 @@ class WebCrawler[F[_]: Async: Console](
       resQ <- Ref.of[F, List[CrawlerResult]](List())
       crawled <- Ref.of[F, Set[String]](Set())
 
-      - <- urlQ.offer(seed)
-      _ <- crawl(urlQ, resQ, crawled)
+      _ <- urlQ.offer(seed)
+      crawlers = List.range(1, numOfCrawlers + 1).map(crawl(_, urlQ, resQ, crawled))
+      _ <- crawlers.parSequence
     } yield ()
 
   def crawl(
+    crawlerId: Int,
     urlQueue: Queue[F, Uri],
     listR: Ref[F, List[CrawlerResult]],
     crawledR: Ref[F, Set[String]],
   ): F[Unit] =
     MonadCancel[F].uncancelable { _ =>
-      parseNext(urlQueue, listR, crawledR)
-    } >> Async[F].sleep(500.milliseconds) >> crawl(urlQueue, listR, crawledR)
+      parseNext(crawlerId, urlQueue, listR, crawledR)
+    } >> Async[F].sleep(1.second) >> crawl(crawlerId, urlQueue, listR, crawledR)
 
   def parseNext(
+    crawlerId: Int,
     urlQueue: Queue[F, Uri],
     listR: Ref[F, List[CrawlerResult]],
     crawledR: Ref[F, Set[String]],
   ): F[Unit] =
     for {
       next <- takeNext(urlQueue, crawledR)
-      _ <- Console[F].println(s"Crawling next url: ${next.toString()}")
+      _ <- Console[F].println(s"$crawlerId: Crawling next url: ${next.toString()}")
 
       host <- getFullHost(next)
       html <- client.expect[String](next)
