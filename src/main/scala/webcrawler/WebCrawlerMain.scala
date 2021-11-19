@@ -32,19 +32,24 @@ object WebCrawlerMain extends IOApp {
   ): IO[ExitCode] =
     (for {
       seed <- Resource.liftK(parseSeed(args))
-      transactor <- transactorResource()
+      transactor <- transactor
       client <- BlazeClientBuilder[IO](global).resource
       repository = new DoobieRepository(transactor)
       crawler <- Resource.liftK(IO.pure(WebCrawler(seed, client, repository)))
     } yield crawler).use(_.start).as(ExitCode.Success)
 
-  def parseSeed(args: List[String]) = checkUrl(args).flatMap {
-    case Right(url) => IO.pure(url)
-    case Left(failure) =>
-      IO.raiseError(new RuntimeException(s"Error parsing url: ${failure.message}"))
-  }
+  def parseSeed(args: List[String]): IO[Uri] =
+    if (args.length < 1 || !args(0).startsWith("http")) {
+      IO.raiseError(new RuntimeException("Invalid url specified"))
+    } else {
+      Uri.fromString(args(0)) match {
+        case Left(failure) =>
+          IO.raiseError(new RuntimeException(s"Error during parsing uri string: $failure"))
+        case Right(uri) => IO.pure(uri)
+      }
+    }
 
-  def transactorResource(): Resource[IO, HikariTransactor[IO]] =
+  def transactor: Resource[IO, HikariTransactor[IO]] =
     for {
       fixedThreadPool <- ExecutionContexts.fixedThreadPool[IO](12)
       transactor <- HikariTransactor.newHikariTransactor[IO](
@@ -54,19 +59,10 @@ object WebCrawlerMain extends IOApp {
         dbPassword,
         fixedThreadPool,
       )
-      _ <- Resource.liftK(initializeDb())
+      _ <- Resource.liftK(initializeDb)
     } yield transactor
 
-  def checkUrl(args: List[String]): IO[Either[ParseFailure, Uri]] =
-    for {
-      uri <-
-        if (args.length < 1 || !args(0).startsWith("http"))
-          IO.pure(ParseResult.fail(args(0), "Invalid url"))
-        else
-          IO.pure(Uri.fromString(args(0)))
-    } yield uri
-
-  def initializeDb(): IO[Unit] = IO
+  def initializeDb: IO[Unit] = IO
     .delay {
       val fw: Flyway = Flyway.configure().dataSource(dbUrl, dbUsername, dbPassword).load()
       fw.migrate()
