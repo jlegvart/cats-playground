@@ -26,19 +26,18 @@ object ReadWriteRemote extends IOApp.Simple {
     (for {
       u <- Uri.fromString(endpoint)
       stream <- getRemoteResource(u)
-    } yield stream)
-      .fold(parseError => IO.raiseError(new RuntimeException(parseError.message)), _.compile.drain)
+    } yield stream) match {
+      case Right(stream) => stream.compile.drain
+      case Left(error)   => IO.raiseError(new RuntimeException(error.message))
+    }
 
-  def getRemoteResource(uri: Uri) = {
-    val a =
-      for {
-        client <- initClient
-        req = Request[IO](Method.GET, uri)
-        chunk <- client.stream(req).flatMap(_.body.chunks)
-        _ <- processChunk(chunk)
-      } yield ()
-    Right(a)
-  }
+  def getRemoteResource(uri: Uri) =
+    (for {
+      client <- initClient
+      req = Request[IO](Method.GET, uri)
+      chunk <- client.stream(req).flatMap(_.body.chunks)
+      _ <- processChunk(chunk)
+    } yield ()).asRight
 
   def initClient() = BlazeClientBuilder[IO](global).stream
 
