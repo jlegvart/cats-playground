@@ -38,10 +38,10 @@ object WebCrawlerMain extends IOApp {
       transactor <- DatabaseConfig.transactor[IO](config, fixedThreadPool)
       initDb <- Resource.liftK(DatabaseConfig.initializeDb[IO](config))
       repository = new DoobieRepository(transactor)
-      // crawler <- initCrawler(seed, transactor, repository)
-      select <- Resource.liftK(selectData(repository))
-    } yield select)
-      .use(_ => IO.unit)
+      crawler <- initCrawler(seed, transactor, repository)
+      // select <- Resource.liftK(selectData(repository))
+    } yield crawler)
+      .use(_.start)
       .as(ExitCode.Success)
 
   def dbConfig =
