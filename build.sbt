@@ -12,10 +12,15 @@ lazy val fs2Version = "3.2.0"
 lazy val http4sVersion = "0.23.6"
 lazy val doobieVersion = "1.0.0-RC1"
 lazy val flywayVersion = "8.0.4"
+lazy val circeVersion = "0.14.1"
+lazy val circeConfigVersion = "0.8.0"
 
 // cats
 libraryDependencies += "org.typelevel" %% "cats-core" % catsVersion withSources () withJavadoc ()
 libraryDependencies += "org.typelevel" %% "cats-effect" % catsEffectVersion withSources () withJavadoc ()
+
+libraryDependencies += "io.circe" %% "circe-generic" % circeVersion
+libraryDependencies += "io.circe" %% "circe-config" % circeConfigVersion
 
 // fs2
 libraryDependencies += "co.fs2" %% "fs2-core" % fs2Version withSources () withJavadoc ()

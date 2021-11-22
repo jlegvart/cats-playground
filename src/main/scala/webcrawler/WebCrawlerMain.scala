@@ -19,13 +19,12 @@ import doobie.hikari.HikariTransactor
 import doobie.util.transactor
 import cats.effect.kernel.Resource
 
-object WebCrawlerMain extends IOApp {
+import io.circe.generic.auto._
+import io.circe.config.syntax._
+import io.circe.config.parser
+import io.m99.petstore.config.DatabaseConfig
 
-  val dbDriver = "org.postgresql.Driver"
-  val dbName = "crawler"
-  val dbUsername = "postgres"
-  val dbPassword = "postgres"
-  val dbUrl = s"jdbc:postgresql://localhost:5432/$dbName"
+object WebCrawlerMain extends IOApp {
 
   val numOfCrawlers = 2
 
@@ -34,13 +33,24 @@ object WebCrawlerMain extends IOApp {
   ): IO[ExitCode] =
     (for {
       seed <- Resource.liftK(parseSeed(args))
-      transactor <- transactor
+      config <- Resource.liftK(dbConfig)
+      fixedThreadPool <- ExecutionContexts.fixedThreadPool[IO](config.connections.poolSize)
+      transactor <- DatabaseConfig.transactor[IO](config, fixedThreadPool)
+      initDb <- Resource.liftK(DatabaseConfig.initializeDb[IO](config))
       repository = new DoobieRepository(transactor)
       // crawler <- initCrawler(seed, transactor, repository)
       select <- Resource.liftK(selectData(repository))
     } yield select)
       .use(_ => IO.unit)
       .as(ExitCode.Success)
+
+  def dbConfig =
+    (for {
+      databaseConfig <- parser.decodePath[DatabaseConfig]("database")
+    } yield databaseConfig) match {
+      case Right(config) => IO.pure(config)
+      case Left(error)   => IO.raiseError(error)
+    }
 
   def initCrawler(
     seed: Uri,
@@ -68,25 +78,5 @@ object WebCrawlerMain extends IOApp {
         case Right(uri) => IO.pure(uri)
       }
     }
-
-  def transactor: Resource[IO, HikariTransactor[IO]] =
-    for {
-      fixedThreadPool <- ExecutionContexts.fixedThreadPool[IO](12)
-      transactor <- HikariTransactor.newHikariTransactor[IO](
-        dbDriver,
-        dbUrl,
-        dbUsername,
-        dbPassword,
-        fixedThreadPool,
-      )
-      _ <- Resource.liftK(initializeDb)
-    } yield transactor
-
-  def initializeDb: IO[Unit] = IO
-    .delay {
-      val fw: Flyway = Flyway.configure().dataSource(dbUrl, dbUsername, dbPassword).load()
-      fw.migrate()
-    }
-    .as(())
 
 }
