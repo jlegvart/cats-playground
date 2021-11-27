@@ -6,6 +6,7 @@ version := "1.0"
 
 fork in run := true
 
+lazy val logbackVersion = "1.2.7"
 lazy val catsVersion = "2.3.0"
 lazy val catsEffectVersion = "3.2.9"
 lazy val fs2Version = "3.2.0"
@@ -14,6 +15,8 @@ lazy val doobieVersion = "1.0.0-RC1"
 lazy val flywayVersion = "8.0.4"
 lazy val circeVersion = "0.14.1"
 lazy val circeConfigVersion = "0.8.0"
+
+ libraryDependencies += "ch.qos.logback" % "logback-classic" % logbackVersion
 
 // cats
 libraryDependencies += "org.typelevel" %% "cats-core" % catsVersion withSources () withJavadoc ()
