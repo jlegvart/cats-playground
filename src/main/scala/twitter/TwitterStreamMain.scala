@@ -25,6 +25,7 @@ object TwitterStreamMain extends IOApp.Simple {
     Logger[IO].info("Starting TwitterStreaming app") >> (for {
       appConfig <- Resource.liftK(AppConfig.loadConfig[IO]())
       appName = appConfig.twitter.name
+      twitterConfig = appConfig.twitter.twitterConfig
       databaseConfig = appConfig.database
       fixedThreadPool <- ExecutionContexts.fixedThreadPool[IO](databaseConfig.connections.poolSize)
       transactor <- DatabaseConfig.transactor[IO](
@@ -35,7 +36,9 @@ object TwitterStreamMain extends IOApp.Simple {
       initDb <- Resource.liftK(DatabaseConfig.initializeDb[IO](appName, databaseConfig))
       u <- Resource.liftK(uri)
       client <- BlazeClientBuilder[IO](global).resource
-    } yield (u, client)).use(res => TWStream(res._1, res._2).stream.compile.drain)
+    } yield (u, client, twitterConfig)).use(res =>
+      TWStream(res._1, res._2).stream(res._3).compile.drain
+    )
 
   def uri: IO[Uri] =
     Uri.fromString(url) match {

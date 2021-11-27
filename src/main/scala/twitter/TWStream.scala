@@ -16,6 +16,7 @@ import io.circe.Json
 import fs2.text
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.Logger
+import config.TwitterConfig
 
 object TWStream {
 
@@ -28,12 +29,6 @@ class TWStream[F[_]: Async: std.Console](url: Uri, client: Client[F]) {
   implicit def unsafeLogger[F[_]: Async] = Slf4jLogger.getLogger[F]
 
   implicit val f = new io.circe.jawn.CirceSupportParser(None, false).facade
-
-  val key = "3bh0E6tURNpuRUfbrrKgCjezi"
-  val secret = "bAAn726LVAQAaX4YOGu7ysIQDwvGhd9vpKtNXniXitdUp6WvNm"
-
-  val accessToken = "429217718-rQ1zzWqgeFgK44YZsuABOmgXv4OhNBiTu7vetCb3"
-  val tokenSecret = "JS5nCQXwzWUkHuP9DVdjh82pH38i9PJNOdW3ye3O6cOnd"
 
   def sign(
     consumerKey: String,
@@ -48,16 +43,18 @@ class TWStream[F[_]: Async: std.Console](url: Uri, client: Client[F]) {
     oauth1.signRequest(req, consumer, callback = None, verifier = None, token = Some(token))
   }
 
-  def stream = {
+  def stream(config: TwitterConfig) = {
     val request = Request[F](method = Method.GET, uri = url)
-    jsonStream(request)
+    jsonStream(request, config)
       .map(_.spaces2)
       .evalMap(Logger[F].info(_))
   }
 
-  def jsonStream(req: Request[F]): fs2.Stream[F, Json] =
+  def jsonStream(req: Request[F], config: TwitterConfig): fs2.Stream[F, Json] =
     for {
-      signed <- fs2.Stream.eval(sign(key, secret, accessToken, tokenSecret)(req))
+      signed <- fs2
+        .Stream
+        .eval(sign(config.key, config.secret, config.accessToken, config.tokenSecret)(req))
       stream <- client.stream(signed).flatMap(_.body.chunks.parseJsonStream)
     } yield stream
 

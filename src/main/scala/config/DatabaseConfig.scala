@@ -8,7 +8,10 @@ import doobie.hikari.HikariTransactor
 import org.flywaydb.core.Flyway
 
 import scala.concurrent.ExecutionContext
-import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
+import io.circe._
+import io.circe.generic.auto._
+import io.circe.parser._
+import io.circe.syntax._
 
 case class DatabaseConnectionsConfig(poolSize: Int)
 
@@ -36,8 +39,11 @@ object DatabaseConfig {
 
   def initializeDb[F[_]](appName: String, config: DatabaseConfig)(implicit S: Sync[F]): F[Unit] = S
     .delay {
-      val fw
-        : Flyway = Flyway.configure().dataSource(config.url + appName, config.user, config.password).load()
+      val fw: Flyway = Flyway
+        .configure()
+        .dataSource(config.url + appName, config.user, config.password)
+        .locations(s"classpath:/db/migration/$appName")
+        .load()
       fw.migrate()
     }
     .as(())

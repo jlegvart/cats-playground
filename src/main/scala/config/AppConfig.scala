@@ -6,10 +6,16 @@ import io.circe.config.parser
 import io.circe.syntax._
 import cats.effect.Sync
 
-
 final case class AppConfig(database: DatabaseConfig, crawler: WebCrawler, twitter: Twitter)
 final case class WebCrawler(name: String)
-final case class Twitter(name: String)
+final case class Twitter(name: String, twitterConfig: TwitterConfig)
+
+final case class TwitterConfig(
+  key: String,
+  secret: String,
+  accessToken: String,
+  tokenSecret: String,
+)
 
 object AppConfig {
 

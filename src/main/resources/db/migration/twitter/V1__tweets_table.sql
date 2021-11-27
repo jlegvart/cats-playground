@@ -1,0 +1,5 @@
+CREATE TABLE tweets (
+  id BIGSERIAL PRIMARY KEY,
+  tweet TEXT NOT NULL,
+  content TIMESTAMP NOT NULL
+);
