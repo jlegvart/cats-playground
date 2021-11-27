@@ -23,20 +23,21 @@ case class DatabaseConfig(
 object DatabaseConfig {
 
   def transactor[F[_]: Async](
+    appName: String,
     config: DatabaseConfig,
     fixedThreadPool: ExecutionContext,
   ): Resource[F, HikariTransactor[F]] = HikariTransactor.newHikariTransactor[F](
     config.driver,
-    config.url,
+    config.url + appName,
     config.user,
     config.password,
     fixedThreadPool,
   )
 
-  def initializeDb[F[_]](config: DatabaseConfig)(implicit S: Sync[F]): F[Unit] = S
+  def initializeDb[F[_]](appName: String, config: DatabaseConfig)(implicit S: Sync[F]): F[Unit] = S
     .delay {
       val fw
-        : Flyway = Flyway.configure().dataSource(config.url, config.user, config.password).load()
+        : Flyway = Flyway.configure().dataSource(config.url + appName, config.user, config.password).load()
       fw.migrate()
     }
     .as(())

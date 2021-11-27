@@ -18,11 +18,8 @@ import doobie.util.ExecutionContexts
 import doobie.hikari.HikariTransactor
 import doobie.util.transactor
 import cats.effect.kernel.Resource
-
-import io.circe.generic.auto._
-import io.circe.config.syntax._
-import io.circe.config.parser
 import database.DatabaseConfig
+import database.AppConfig
 
 object WebCrawlerMain extends IOApp {
 
@@ -33,24 +30,22 @@ object WebCrawlerMain extends IOApp {
   ): IO[ExitCode] =
     (for {
       seed <- Resource.liftK(parseSeed(args))
-      config <- Resource.liftK(dbConfig)
-      fixedThreadPool <- ExecutionContexts.fixedThreadPool[IO](config.connections.poolSize)
-      transactor <- DatabaseConfig.transactor[IO](config, fixedThreadPool)
-      initDb <- Resource.liftK(DatabaseConfig.initializeDb[IO](config))
+      appConfig <- Resource.liftK(AppConfig.loadConfig[IO]())
+      appName = appConfig.crawler.name
+      databaseConfig = appConfig.database
+      fixedThreadPool <- ExecutionContexts.fixedThreadPool[IO](databaseConfig.connections.poolSize)
+      transactor <- DatabaseConfig.transactor[IO](
+        appName,
+        databaseConfig,
+        fixedThreadPool,
+      )
+      initDb <- Resource.liftK(DatabaseConfig.initializeDb[IO](appName, databaseConfig))
       repository = new DoobieRepository(transactor)
       crawler <- initCrawler(seed, transactor, repository)
       // select <- Resource.liftK(selectData(repository))
     } yield crawler)
       .use(_.start)
       .as(ExitCode.Success)
-
-  def dbConfig =
-    (for {
-      databaseConfig <- parser.decodePath[DatabaseConfig]("database")
-    } yield databaseConfig) match {
-      case Right(config) => IO.pure(config)
-      case Left(error)   => IO.raiseError(error)
-    }
 
   def initCrawler(
     seed: Uri,
