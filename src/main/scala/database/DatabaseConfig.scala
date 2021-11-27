@@ -1,4 +1,4 @@
-package io.m99.petstore.config
+package database
 
 import cats.effect.Async
 import cats.effect.Resource

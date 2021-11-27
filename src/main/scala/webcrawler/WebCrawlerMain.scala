@@ -22,7 +22,7 @@ import cats.effect.kernel.Resource
 import io.circe.generic.auto._
 import io.circe.config.syntax._
 import io.circe.config.parser
-import io.m99.petstore.config.DatabaseConfig
+import database.DatabaseConfig
 
 object WebCrawlerMain extends IOApp {
 
