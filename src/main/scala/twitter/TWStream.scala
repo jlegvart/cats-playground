@@ -14,6 +14,8 @@ import org.typelevel.jawn.fs2._
 import scala.concurrent.ExecutionContext.global
 import io.circe.Json
 import fs2.text
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.Logger
 
 object TWStream {
 
@@ -22,6 +24,8 @@ object TWStream {
 }
 
 class TWStream[F[_]: Async: std.Console](url: Uri, client: Client[F]) {
+
+  implicit def unsafeLogger[F[_]: Async] = Slf4jLogger.getLogger[F]
 
   implicit val f = new io.circe.jawn.CirceSupportParser(None, false).facade
 
@@ -48,7 +52,7 @@ class TWStream[F[_]: Async: std.Console](url: Uri, client: Client[F]) {
     val request = Request[F](method = Method.GET, uri = url)
     jsonStream(request)
       .map(_.spaces2)
-      .evalMap(std.Console[F].println(_))
+      .evalMap(Logger[F].info(_))
   }
 
   def jsonStream(req: Request[F]): fs2.Stream[F, Json] =
