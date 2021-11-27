@@ -1,4 +1,4 @@
-package database
+package config
 
 import cats.effect.Async
 import cats.effect.Resource

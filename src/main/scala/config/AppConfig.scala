@@ -1,4 +1,4 @@
-package database
+package config
 
 import io.circe._
 import io.circe.generic.auto._

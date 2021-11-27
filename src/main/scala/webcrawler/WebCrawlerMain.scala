@@ -18,8 +18,8 @@ import doobie.util.ExecutionContexts
 import doobie.hikari.HikariTransactor
 import doobie.util.transactor
 import cats.effect.kernel.Resource
-import database.DatabaseConfig
-import database.AppConfig
+import config.AppConfig
+import config.DatabaseConfig
 
 object WebCrawlerMain extends IOApp {
 

@@ -7,6 +7,9 @@ import org.http4s.Uri
 import org.http4s.blaze.client.BlazeClientBuilder
 import scala.concurrent.ExecutionContext.global
 import cats.effect.kernel.Resource
+import doobie.util.ExecutionContexts
+import config.{AppConfig, DatabaseConfig}
+import scala.concurrent.ExecutionContext
 
 object TwitterStreamMain extends IOApp.Simple {
 
@@ -14,6 +17,16 @@ object TwitterStreamMain extends IOApp.Simple {
 
   def run: IO[Unit] =
     (for {
+      appConfig <- Resource.liftK(AppConfig.loadConfig[IO]())
+      appName = appConfig.twitter.name
+      databaseConfig = appConfig.database
+      fixedThreadPool <- ExecutionContexts.fixedThreadPool[IO](databaseConfig.connections.poolSize)
+      transactor <- DatabaseConfig.transactor[IO](
+        appName,
+        databaseConfig,
+        fixedThreadPool,
+      )
+      initDb <- Resource.liftK(DatabaseConfig.initializeDb[IO](appName, databaseConfig))
       u <- Resource.liftK(uri)
       client <- BlazeClientBuilder[IO](global).resource
     } yield (u, client)).use(res => TWStream(res._1, res._2).stream.compile.drain)
