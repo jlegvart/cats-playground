@@ -10,7 +10,7 @@ import cats.effect.kernel.Resource
 
 object TwitterStreamMain extends IOApp.Simple {
 
-  val url = "https://stream.twitter.com/1.1/statuses/filter.json?track=trump"
+  val url = "https://stream.twitter.com/1.1/statuses/filter.json?track=covid19"
 
   def run: IO[Unit] =
     (for {
