@@ -4,6 +4,7 @@ import org.http4s.Request
 import org.http4s.client.oauth1
 import org.http4s.blaze.client._
 
+import cats.implicits._
 import cats.syntax.all._
 import cats.effect._
 import cats.effect.syntax._
@@ -17,44 +18,57 @@ import fs2.text
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.Logger
 import config.TwitterConfig
+import twitter.model.Tweet
+import twitter.repository.TwitterRepository
+import java.time.LocalDateTime
 
-object TWStream {
+object TwitterStreamService {
 
-  def apply[F[_]: Async: std.Console](url: Uri, client: Client[F]) = new TWStream[F](url, client)
+  def apply[F[_]: Async: std.Console](
+    url: Uri,
+    client: Client[F],
+    repository: TwitterRepository[F],
+    config: TwitterConfig,
+  ) = new TwitterStreamService[F](url, client, repository, config)
 
 }
 
-class TWStream[F[_]: Async: std.Console](url: Uri, client: Client[F]) {
+class TwitterStreamService[F[_]: Async: std.Console](
+  url: Uri,
+  client: Client[F],
+  repository: TwitterRepository[F],
+  config: TwitterConfig,
+) {
 
   implicit def unsafeLogger[F[_]: Async] = Slf4jLogger.getLogger[F]
 
   implicit val f = new io.circe.jawn.CirceSupportParser(None, false).facade
 
   def sign(
-    consumerKey: String,
-    consumerSecret: String,
-    accessToken: String,
-    accessSecret: String,
-  )(
     req: Request[F]
   ): F[Request[F]] = {
-    val consumer = oauth1.Consumer(consumerKey, consumerSecret)
-    val token = oauth1.Token(accessToken, accessSecret)
+    val consumer = oauth1.Consumer(config.key, config.secret)
+    val token = oauth1.Token(config.accessToken, config.tokenSecret)
     oauth1.signRequest(req, consumer, callback = None, verifier = None, token = Some(token))
   }
 
-  def stream(config: TwitterConfig) = {
+  def stream() = {
     val request = Request[F](method = Method.GET, uri = url)
     jsonStream(request, config)
       .map(_.spaces2)
-      .evalMap(Logger[F].info(_))
+      .through(saveTweet(_))
   }
+
+  def saveTweet(stream: fs2.Stream[F, String]) =
+    stream
+      .map(Tweet(None, _, LocalDateTime.now()))
+      .parEvalMap(8)(repository.insert)
 
   def jsonStream(req: Request[F], config: TwitterConfig): fs2.Stream[F, Json] =
     for {
       signed <- fs2
         .Stream
-        .eval(sign(config.key, config.secret, config.accessToken, config.tokenSecret)(req))
+        .eval(sign(req))
       stream <- client.stream(signed).flatMap(_.body.chunks.parseJsonStream)
     } yield stream
 

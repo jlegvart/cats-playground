@@ -14,6 +14,8 @@ import scala.concurrent.ExecutionContext
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import cats.effect.kernel.Sync
 import org.typelevel.log4cats.Logger
+import twitter.repository.TwitterRepository
+import twitter.TwitterStreamService
 
 object TwitterStreamMain extends IOApp.Simple {
 
@@ -33,12 +35,12 @@ object TwitterStreamMain extends IOApp.Simple {
         databaseConfig,
         fixedThreadPool,
       )
+      repository = TwitterRepository(transactor)
       initDb <- Resource.liftK(DatabaseConfig.initializeDb[IO](appName, databaseConfig))
       u <- Resource.liftK(uri)
       client <- BlazeClientBuilder[IO](global).resource
-    } yield (u, client, twitterConfig)).use(res =>
-      TWStream(res._1, res._2).stream(res._3).compile.drain
-    )
+    } yield (TwitterStreamService(u, client, repository, twitterConfig)))
+      .use(_.stream.compile.drain)
 
   def uri: IO[Uri] =
     Uri.fromString(url) match {
