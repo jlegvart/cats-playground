@@ -12,7 +12,8 @@ import java.sql.Timestamp
 case class TwitterRepository[F[_]: MonadCancelThrow](val xa: transactor.Transactor[F]) {
 
   def insert(tweet: Tweet): F[Tweet] =
-    sql"INSERT INTO tweets (tweet, added) values (${tweet.tweet}, ${Timestamp.valueOf(tweet.added)})"
+    sql"INSERT INTO tweets (tweet, tweetId, added) values (${tweet.tweet}, ${tweet.tweetId}, ${Timestamp
+      .valueOf(tweet.added)})"
       .update
       .withUniqueGeneratedKeys[Long]("id")
       .map(id => tweet.copy(id = id.some))

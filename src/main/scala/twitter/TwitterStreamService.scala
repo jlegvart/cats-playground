@@ -44,6 +44,8 @@ class TwitterStreamService[F[_]: Async: std.Console](
 
   implicit val f = new io.circe.jawn.CirceSupportParser(None, false).facade
 
+  val maxConcurrent = 4
+
   def sign(
     req: Request[F]
   ): F[Request[F]] = {
@@ -55,14 +57,17 @@ class TwitterStreamService[F[_]: Async: std.Console](
   def stream() = {
     val request = Request[F](method = Method.GET, uri = url)
     jsonStream(request, config)
-      .map(_.spaces2)
-      .through(saveTweet(_))
+      .map(json => ((json \\ "id_str").headOption.flatMap(_.asString), json.noSpaces))
+      .through(saveTweet)
   }
 
-  def saveTweet(stream: fs2.Stream[F, String]) =
+  def saveTweet(stream: fs2.Stream[F, (Option[String], String)]) =
     stream
-      .map(Tweet(None, _, LocalDateTime.now()))
-      .parEvalMap(8)(repository.insert)
+      .map(tuple => Tweet(None, tuple._1, tuple._2, LocalDateTime.now()))
+      .parEvalMap(maxConcurrent)(repository.insert)
+      .parEvalMap(maxConcurrent)(tweet =>
+        Logger[F].info(s"Tweet saved: ${tweet.id.get} => ${tweet.tweetId.getOrElse("")}")
+      )
 
   def jsonStream(req: Request[F], config: TwitterConfig): fs2.Stream[F, Json] =
     for {
